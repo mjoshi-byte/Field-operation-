@@ -1,6 +1,10 @@
 import { supabase } from './supabaseClient.js';
 
-const BASE = '/api';
+// In local dev, Vite's dev-server proxy (vite.config.js) forwards /api/* to
+// http://localhost:4000, so the relative path works. In production on Vercel the
+// frontend and backend are two separate deployments, so VITE_API_BASE must point at
+// the backend's full URL (e.g. https://your-backend.vercel.app/api).
+const BASE = import.meta.env.VITE_API_BASE || '/api';
 
 async function getToken() {
   const { data } = await supabase.auth.getSession();
@@ -68,4 +72,23 @@ export const api = {
   leaderboard: (stage) => request(`/dashboard/leaderboard/${stage}`),
   notifications: () => request('/dashboard/notifications'),
   auditLog: () => request('/dashboard/audit'),
+
+  // CSV export needs the auth header (it's a protected route), so a plain <a href>
+  // won't work — fetch it with the token attached, then trigger a browser download.
+  downloadUpdatesCsv: async () => {
+    const token = await getToken();
+    const res = await fetch(BASE + '/dashboard/export/updates.csv', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Could not download CSV (' + res.status + ')');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'updates-export.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
 };

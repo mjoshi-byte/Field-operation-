@@ -98,7 +98,7 @@ export default function TeamDashboard() {
       </div>
 
       <p style={{ marginTop: 16 }}>
-        <a href="/api/dashboard/export/updates.csv">Download updates data as spreadsheet (CSV)</a>
+        <a style={{ cursor: 'pointer' }} onClick={() => api.downloadUpdatesCsv()}>Download updates data as spreadsheet (CSV)</a>
       </p>
     </div>
   );
