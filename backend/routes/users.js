@@ -4,143 +4,157 @@ const { requireAuth, requireRole, audit, notify } = require('../middleware/auth'
 
 const router = express.Router();
 
-// List users (admin/supervisor/trainer see all; FO sees only self)
-router.get('/', requireAuth, (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   if (req.user.role === 'fo') {
-    return res.json({ users: [sanitize(req.user)] });
+    return res.json({ users: [req.user] });
   }
   const { stage, city, status, role } = req.query;
-  let sql = 'SELECT * FROM users WHERE 1=1';
+  const clauses = [];
   const params = [];
-  if (stage) { sql += ' AND stage = ?'; params.push(stage); }
-  if (city) { sql += ' AND city = ?'; params.push(city); }
-  if (status) { sql += ' AND status = ?'; params.push(status); }
-  if (role) { sql += ' AND role = ?'; params.push(role); }
-  sql += ' ORDER BY created_at DESC';
-  const users = db.prepare(sql).all(...params);
-  res.json({ users: users.map(sanitize) });
+  if (stage) { params.push(stage); clauses.push(`stage = $${params.length}`); }
+  if (city) { params.push(city); clauses.push(`city = $${params.length}`); }
+  if (status) { params.push(status); clauses.push(`status = $${params.length}`); }
+  if (role) { params.push(role); clauses.push(`role = $${params.length}`); }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const { rows } = await db.query(`SELECT * FROM users ${where} ORDER BY created_at DESC`, params);
+  res.json({ users: rows });
 });
 
-// Admin: add a new hire (FO) — or a new trainer/supervisor/admin account
-router.post('/', requireAuth, requireRole('admin'), (req, res) => {
-  const { name, mobile_number, city, preferred_language, role, stage } = req.body;
-  if (!name || !mobile_number) {
-    return res.status(400).json({ error: 'name and mobile_number are required' });
+// Admin: add a new hire (FO) — or a new trainer/supervisor/admin account, by email.
+// They'll be linked to this row automatically the first time they sign in with that email.
+router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
+  const { name, email, mobile_number, city, preferred_language, role, stage } = req.body;
+  if (!name || !email) {
+    return res.status(400).json({ error: 'name and email are required' });
   }
   const finalRole = role || 'fo';
   const finalStage = finalRole === 'fo' ? (stage || 'ojt') : null;
 
   try {
-    const info = db
-      .prepare(
-        `INSERT INTO users (name, mobile_number, city, preferred_language, role, stage, created_by)
-         VALUES (?,?,?,?,?,?,?)`
-      )
-      .run(name, mobile_number, city || null, preferred_language || 'en', finalRole, finalStage, req.user.id);
+    const { rows } = await db.query(
+      `INSERT INTO users (name, email, mobile_number, city, preferred_language, role, stage, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [name, email.toLowerCase(), mobile_number || null, city || null, preferred_language || 'en', finalRole, finalStage, req.user.id]
+    );
+    const user = rows[0];
 
     if (finalRole === 'fo' && finalStage === 'ojt') {
-      // Initialize OJT day rows: day 1 unlocked/in_progress, others locked
-      const days = db.prepare('SELECT * FROM ojt_days ORDER BY day_number').all();
-      days.forEach((day, idx) => {
-        db.prepare('INSERT INTO ojt_fo_days (fo_id, day_id, status) VALUES (?,?,?)').run(
-          info.lastInsertRowid,
-          day.id,
-          idx === 0 ? 'in_progress' : 'locked'
-        );
-      });
+      const { rows: days } = await db.query('SELECT * FROM ojt_days ORDER BY day_number');
+      for (let i = 0; i < days.length; i++) {
+        await db.query('INSERT INTO ojt_fo_days (fo_id, day_id, status) VALUES ($1,$2,$3)', [
+          user.id,
+          days[i].id,
+          i === 0 ? 'in_progress' : 'locked',
+        ]);
+      }
     }
 
-    audit(req.user.id, 'add_user', 'user', info.lastInsertRowid, { name, role: finalRole, stage: finalStage });
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-    res.status(201).json({ user: sanitize(user) });
+    await audit(req.user.id, 'add_user', 'user', user.id, { name, email, role: finalRole, stage: finalStage });
+    res.status(201).json({ user });
   } catch (e) {
-    if (String(e).includes('UNIQUE')) {
-      return res.status(409).json({ error: 'A user with this mobile number already exists' });
+    if (String(e).includes('duplicate key')) {
+      return res.status(409).json({ error: 'A user with this email already exists' });
     }
     res.status(500).json({ error: String(e) });
   }
 });
 
-// Move an FO between OJT and Production (admin, supervisor, trainer)
-router.post('/:id/move-stage', requireAuth, requireRole('admin', 'supervisor', 'trainer'), (req, res) => {
-  const { stage } = req.body; // 'ojt' | 'production'
+// Admin: change someone's role
+router.post('/:id/role', requireAuth, requireRole('admin'), async (req, res) => {
+  const { role } = req.body;
+  if (!['fo', 'trainer', 'supervisor', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'invalid role' });
+  }
+  const stage = role === 'fo' ? 'ojt' : null;
+  const { rows } = await db.query('UPDATE users SET role = $1, stage = COALESCE(stage, $2) WHERE id = $3 RETURNING *', [
+    role,
+    stage,
+    req.params.id,
+  ]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await audit(req.user.id, 'change_role', 'user', req.params.id, { role });
+  res.json({ user: rows[0] });
+});
+
+router.post('/:id/move-stage', requireAuth, requireRole('admin', 'supervisor', 'trainer'), async (req, res) => {
+  const { stage } = req.body;
   if (!['ojt', 'production'].includes(stage)) {
     return res.status(400).json({ error: "stage must be 'ojt' or 'production'" });
   }
-  const fo = db.prepare('SELECT * FROM users WHERE id = ? AND role = ?').get(req.params.id, 'fo');
+  const { rows: foRows } = await db.query('SELECT * FROM users WHERE id = $1 AND role = $2', [req.params.id, 'fo']);
+  const fo = foRows[0];
   if (!fo) return res.status(404).json({ error: 'FO not found' });
 
-  db.prepare('UPDATE users SET stage = ? WHERE id = ?').run(stage, fo.id);
+  await db.query('UPDATE users SET stage = $1 WHERE id = $2', [stage, fo.id]);
 
   if (stage === 'ojt' && fo.stage !== 'ojt') {
-    // (Re)initialize OJT progress rows if missing
-    const days = db.prepare('SELECT * FROM ojt_days ORDER BY day_number').all();
-    days.forEach((day, idx) => {
-      const exists = db
-        .prepare('SELECT 1 FROM ojt_fo_days WHERE fo_id = ? AND day_id = ?')
-        .get(fo.id, day.id);
-      if (!exists) {
-        db.prepare('INSERT INTO ojt_fo_days (fo_id, day_id, status) VALUES (?,?,?)').run(
+    const { rows: days } = await db.query('SELECT * FROM ojt_days ORDER BY day_number');
+    for (let i = 0; i < days.length; i++) {
+      const { rows: existing } = await db.query('SELECT 1 FROM ojt_fo_days WHERE fo_id = $1 AND day_id = $2', [
+        fo.id,
+        days[i].id,
+      ]);
+      if (existing.length === 0) {
+        await db.query('INSERT INTO ojt_fo_days (fo_id, day_id, status) VALUES ($1,$2,$3)', [
           fo.id,
-          day.id,
-          idx === 0 ? 'in_progress' : 'locked'
-        );
+          days[i].id,
+          i === 0 ? 'in_progress' : 'locked',
+        ]);
       }
-    });
+    }
   }
 
-  audit(req.user.id, 'move_stage', 'user', fo.id, { from: fo.stage, to: stage });
-  res.json({ user: sanitize(db.prepare('SELECT * FROM users WHERE id = ?').get(fo.id)) });
+  await audit(req.user.id, 'move_stage', 'user', fo.id, { from: fo.stage, to: stage });
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [fo.id]);
+  res.json({ user: rows[0] });
 });
 
-// Put a user on hold (trainer/supervisor/admin)
-router.post('/:id/hold', requireAuth, requireRole('admin', 'supervisor', 'trainer'), (req, res) => {
+router.post('/:id/hold', requireAuth, requireRole('admin', 'supervisor', 'trainer'), async (req, res) => {
   const { reason } = req.body;
-  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  const { rows: targetRows } = await db.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
+  const target = targetRows[0];
   if (!target) return res.status(404).json({ error: 'User not found' });
 
-  db.prepare(
-    'UPDATE users SET status = "on_hold", hold_reason = ?, held_by = ?, held_at = datetime("now") WHERE id = ?'
-  ).run(reason || null, req.user.id, target.id);
-
-  notify(target.id, 'hold', `You've been put on hold${reason ? `: ${reason}` : ''}. Reach out to your trainer or supervisor.`, target.id);
-  audit(req.user.id, 'hold', 'user', target.id, { reason });
-  res.json({ user: sanitize(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)) });
+  await db.query(
+    `UPDATE users SET status = 'on_hold', hold_reason = $1, held_by = $2, held_at = now() WHERE id = $3`,
+    [reason || null, req.user.id, target.id]
+  );
+  await notify(target.id, 'hold', `You've been put on hold${reason ? `: ${reason}` : ''}. Reach out to your trainer or supervisor.`, target.id);
+  await audit(req.user.id, 'hold', 'user', target.id, { reason });
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [target.id]);
+  res.json({ user: rows[0] });
 });
 
-// Take a user off hold
-router.post('/:id/release-hold', requireAuth, requireRole('admin', 'supervisor', 'trainer'), (req, res) => {
-  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+router.post('/:id/release-hold', requireAuth, requireRole('admin', 'supervisor', 'trainer'), async (req, res) => {
+  const { rows: targetRows } = await db.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
+  const target = targetRows[0];
   if (!target) return res.status(404).json({ error: 'User not found' });
 
-  db.prepare(
-    'UPDATE users SET status = "active", hold_reason = NULL, held_by = NULL, held_at = NULL WHERE id = ?'
-  ).run(target.id);
-
-  notify(target.id, 'off_hold', "You're back in action — hold lifted.", target.id);
-  audit(req.user.id, 'release_hold', 'user', target.id, {});
-  res.json({ user: sanitize(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)) });
+  await db.query(
+    `UPDATE users SET status = 'active', hold_reason = NULL, held_by = NULL, held_at = NULL WHERE id = $1`,
+    [target.id]
+  );
+  await notify(target.id, 'off_hold', "You're back in action — hold lifted.", target.id);
+  await audit(req.user.id, 'release_hold', 'user', target.id, {});
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [target.id]);
+  res.json({ user: rows[0] });
 });
 
-// Set which existing FO a trainee is shadowing during OJT
-router.post('/:id/shadowing', requireAuth, requireRole('admin', 'supervisor', 'trainer'), (req, res) => {
+router.post('/:id/shadowing', requireAuth, requireRole('admin', 'supervisor', 'trainer'), async (req, res) => {
   const { shadowing_fo_id } = req.body;
-  db.prepare('UPDATE users SET shadowing_fo_id = ? WHERE id = ?').run(shadowing_fo_id || null, req.params.id);
-  audit(req.user.id, 'set_shadowing', 'user', req.params.id, { shadowing_fo_id });
-  res.json({ user: sanitize(db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id)) });
+  await db.query('UPDATE users SET shadowing_fo_id = $1 WHERE id = $2', [shadowing_fo_id || null, req.params.id]);
+  await audit(req.user.id, 'set_shadowing', 'user', req.params.id, { shadowing_fo_id });
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
+  res.json({ user: rows[0] });
 });
 
-router.get('/:id', requireAuth, (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   if (req.user.role === 'fo' && String(req.user.id) !== req.params.id) {
     return res.status(403).json({ error: 'Not allowed' });
   }
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'Not found' });
-  res.json({ user: sanitize(user) });
+  const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  res.json({ user: rows[0] });
 });
-
-function sanitize(user) {
-  return { ...user };
-}
 
 module.exports = router;

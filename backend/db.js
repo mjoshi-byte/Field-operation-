@@ -1,16 +1,22 @@
-const path = require('path');
-const fs = require('fs');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 
-const DB_PATH = path.join(__dirname, 'data.sqlite');
-const isNew = !fs.existsSync(DB_PATH);
+if (!process.env.DATABASE_URL) {
+  console.warn(
+    'DATABASE_URL is not set. Copy backend/.env.example to backend/.env and fill in your Supabase connection string.'
+  );
+}
 
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+// Supabase's pooled connection string needs SSL; `rejectUnauthorized: false` matches
+// what Supabase's own docs recommend for server-side connections.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
+});
 
-// Always (re)apply schema — CREATE TABLE IF NOT EXISTS, safe to run every boot.
-const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sql'), 'utf8');
-db.exec(schema);
+// Thin helper so route files can do `const { rows } = await db.query(sql, params)`.
+const db = {
+  query: (text, params) => pool.query(text, params),
+  pool,
+};
 
-module.exports = { db, isNew };
+module.exports = { db };

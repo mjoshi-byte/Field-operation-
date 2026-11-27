@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
 import { api } from './api.js';
+import { supabase } from './supabaseClient.js';
 
 import Login from './pages/Login.jsx';
 import FODashboard from './pages/FODashboard.jsx';
@@ -18,28 +19,36 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const token = localStorage.getItem('fo_token');
-    if (!token) {
+  async function loadAppUser() {
+    try {
+      const res = await api.me();
+      setUser(res.user);
+      if (res.user.role === 'fo') navigate('/me');
+      else navigate('/team');
+    } catch (e) {
+      setUser(null);
+    } finally {
       setLoading(false);
-      return;
     }
-    api
-      .me()
-      .then((res) => setUser(res.user))
-      .catch(() => localStorage.removeItem('fo_token'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  function handleLogin(u) {
-    setUser(u);
-    if (u.role === 'fo') navigate('/me');
-    else navigate('/team');
   }
 
+  useEffect(() => {
+    // Pick up an existing session (e.g. a page refresh) ...
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) loadAppUser();
+      else setLoading(false);
+    });
+    // ...and react to sign-in (including the magic-link redirect) / sign-out as they happen.
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') loadAppUser();
+      if (event === 'SIGNED_OUT') setUser(null);
+    });
+    return () => listener.subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleLogout() {
-    api.logout().catch(() => {});
-    localStorage.removeItem('fo_token');
+    supabase.auth.signOut();
     setUser(null);
     navigate('/login');
   }
@@ -49,7 +58,7 @@ export default function App() {
   if (!user) {
     return (
       <Routes>
-        <Route path="*" element={<Login onLogin={handleLogin} />} />
+        <Route path="*" element={<Login />} />
       </Routes>
     );
   }

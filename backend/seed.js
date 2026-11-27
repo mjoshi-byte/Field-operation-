@@ -1,6 +1,9 @@
-// Seeds the 5-day OJT checklist from Appendix A of the blueprint, plus a few
-// sample accounts so you can log in immediately. Safe to re-run (idempotent-ish:
-// it skips seeding days if they already exist).
+// Seeds the 5-day OJT checklist from Appendix A of the blueprint. Run once against a
+// fresh Supabase project (after you've run db/schema.sql in the SQL editor).
+// Sample users are NOT seeded here anymore — with Supabase email auth, accounts are
+// created the moment someone signs in for the first time (see middleware/auth.js).
+// Add ADMIN_EMAILS=you@company.com to backend/.env so your own sign-in becomes admin.
+require('dotenv').config();
 const { db } = require('./db');
 
 const CHECKLIST = [
@@ -57,61 +60,37 @@ const CHECKLIST = [
   },
 ];
 
-function seedChecklist() {
-  const existing = db.prepare('SELECT COUNT(*) c FROM ojt_days').get().c;
-  if (existing > 0) {
+async function seedChecklist() {
+  const { rows } = await db.query('SELECT COUNT(*)::int c FROM ojt_days');
+  if (rows[0].c > 0) {
     console.log('OJT checklist already seeded, skipping.');
     return;
   }
-  CHECKLIST.forEach((day) => {
-    const dayInfo = db.prepare('INSERT INTO ojt_days (day_number, title) VALUES (?,?)').run(day.day_number, day.title);
-    day.items.forEach((item, idx) => {
-      const itemInfo = db
-        .prepare('INSERT INTO ojt_items (day_id, position, title) VALUES (?,?,?)')
-        .run(dayInfo.lastInsertRowid, idx, item.title);
-      item.subchecks.forEach((label, subIdx) => {
-        db.prepare('INSERT INTO ojt_subchecks (item_id, position, label) VALUES (?,?,?)').run(
-          itemInfo.lastInsertRowid,
-          subIdx,
-          label
-        );
-      });
-    });
-  });
+  for (const day of CHECKLIST) {
+    const { rows: dayRows } = await db.query('INSERT INTO ojt_days (day_number, title) VALUES ($1,$2) RETURNING id', [
+      day.day_number, day.title,
+    ]);
+    const dayId = dayRows[0].id;
+    for (let i = 0; i < day.items.length; i++) {
+      const item = day.items[i];
+      const { rows: itemRows } = await db.query('INSERT INTO ojt_items (day_id, position, title) VALUES ($1,$2,$3) RETURNING id', [
+        dayId, i, item.title,
+      ]);
+      const itemId = itemRows[0].id;
+      for (let j = 0; j < item.subchecks.length; j++) {
+        await db.query('INSERT INTO ojt_subchecks (item_id, position, label) VALUES ($1,$2,$3)', [itemId, j, item.subchecks[j]]);
+      }
+    }
+  }
   console.log('Seeded 5-day OJT checklist from Appendix A.');
 }
 
-function seedUsers() {
-  const existing = db.prepare('SELECT COUNT(*) c FROM users').get().c;
-  if (existing > 0) {
-    console.log('Users already exist, skipping sample accounts.');
-    return;
-  }
-  const insert = db.prepare(
-    `INSERT INTO users (name, mobile_number, city, preferred_language, role, stage) VALUES (?,?,?,?,?,?)`
-  );
-  const admin = insert.run('Khalid (Admin)', '9000000001', 'Bengaluru', 'en', 'admin', null);
-  insert.run('Asha (Trainer)', '9000000002', 'Bengaluru', 'en', 'trainer', null);
-  insert.run('Rahul (Supervisor)', '9000000003', 'Bengaluru', 'en', 'supervisor', null);
-  const fo = insert.run('Priya (FO)', '9000000004', 'Bengaluru', 'hi', 'fo', 'ojt');
-
-  // Give the sample FO Day 1 unlocked
-  const days = db.prepare('SELECT * FROM ojt_days ORDER BY day_number').all();
-  days.forEach((day, idx) => {
-    db.prepare('INSERT INTO ojt_fo_days (fo_id, day_id, status) VALUES (?,?,?)').run(
-      fo.lastInsertRowid,
-      day.id,
-      idx === 0 ? 'in_progress' : 'locked'
-    );
+seedChecklist()
+  .then(() => {
+    console.log('Seed complete.');
+    process.exit(0);
+  })
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
   });
-
-  console.log('Seeded sample accounts (sign in with the mobile numbers below, OTP is logged to console):');
-  console.log('  Admin:      9000000001');
-  console.log('  Trainer:    9000000002');
-  console.log('  Supervisor: 9000000003');
-  console.log('  FO:         9000000004');
-}
-
-seedChecklist();
-seedUsers();
-console.log('Seed complete.');

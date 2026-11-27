@@ -1,13 +1,16 @@
-const BASE = import.meta.env.VITE_API_URL || '/api';
+import { supabase } from './supabaseClient.js';
 
-function getToken() {
-  return localStorage.getItem('fo_token');
+const BASE = '/api';
+
+async function getToken() {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token || null;
 }
 
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (auth) {
-    const token = getToken();
+    const token = await getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
   const res = await fetch(BASE + path, {
@@ -23,11 +26,9 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
 }
 
 export const api = {
-  // auth
-  requestOtp: (mobile_number) => request('/auth/request-otp', { method: 'POST', body: { mobile_number }, auth: false }),
-  verifyOtp: (mobile_number, code) => request('/auth/verify-otp', { method: 'POST', body: { mobile_number, code }, auth: false }),
+  // auth — actual sign-in/out happens via Supabase (see Login.jsx); this just fetches
+  // the app-level user row that matches the signed-in Supabase account.
   me: () => request('/auth/me'),
-  logout: () => request('/auth/logout', { method: 'POST' }),
 
   // users
   listUsers: (params = {}) => request('/users?' + new URLSearchParams(params)),

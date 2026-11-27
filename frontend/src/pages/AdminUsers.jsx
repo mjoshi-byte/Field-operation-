@@ -4,7 +4,7 @@ import { api } from '../api.js';
 export default function AdminUsers() {
   const [users, setUsers] = useState(null);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ name: '', mobile_number: '', city: '', preferred_language: 'en', role: 'fo', stage: 'ojt' });
+  const [form, setForm] = useState({ name: '', email: '', city: '', preferred_language: 'en', role: 'fo', stage: 'ojt' });
   const [busy, setBusy] = useState(false);
 
   function load() {
@@ -18,7 +18,7 @@ export default function AdminUsers() {
     setError('');
     try {
       await api.addUser(form);
-      setForm({ name: '', mobile_number: '', city: '', preferred_language: 'en', role: 'fo', stage: 'ojt' });
+      setForm({ name: '', email: '', city: '', preferred_language: 'en', role: 'fo', stage: 'ojt' });
       load();
     } catch (err) {
       setError(err.message);
@@ -48,7 +48,7 @@ export default function AdminUsers() {
       <form onSubmit={addUser} style={{ background: 'white', padding: 16, borderRadius: 10, marginBottom: 20, maxWidth: 500 }}>
         <h3 style={{ marginTop: 0 }}>Add new hire / staff</h3>
         <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required style={inputStyle} />
-        <input placeholder="Mobile number" value={form.mobile_number} onChange={(e) => setForm({ ...form, mobile_number: e.target.value })} required style={inputStyle} />
+        <input type="email" placeholder="Email address" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required style={inputStyle} />
         <input placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} style={inputStyle} />
         <select value={form.preferred_language} onChange={(e) => setForm({ ...form, preferred_language: e.target.value })} style={inputStyle}>
           {['en', 'hi', 'kn', 'te', 'mr'].map((l) => <option key={l} value={l}>{l}</option>)}
@@ -80,7 +80,7 @@ export default function AdminUsers() {
         <tbody>
           {users?.map((u) => (
             <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td style={td}>{u.name} <span style={{ color: '#999' }}>({u.mobile_number})</span></td>
+              <td style={td}>{u.name} <span style={{ color: '#999' }}>({u.email})</span></td>
               <td style={td}>{u.role}</td>
               <td style={td}>{u.stage || '—'}</td>
               <td style={td}>{u.status}</td>
