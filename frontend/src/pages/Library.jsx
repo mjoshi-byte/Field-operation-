@@ -46,6 +46,20 @@ function folderNameFromFile(f) {
   return parts.length > 1 ? parts[0] : null;
 }
 
+// Recognizes a trailing language word on a filename — "qc-sop_Hindi", "Field Officer
+// SOP - Kannada", "doc (Marathi)" — however it's separated (_ / - / " - " / spaces /
+// parens). Returns the base title with that word stripped, plus the language code,
+// so "qc-sop" and "qc-sop_Hindi" are recognized as the same document in two languages
+// instead of two separate library entries.
+const LANGUAGE_WORDS = { english: 'en', hindi: 'hi', kannada: 'kn', telugu: 'te', marathi: 'mr' };
+function detectLanguageAndBase(nameNoExt) {
+  const m = nameNoExt.match(/^(.*?)[\s_-]+\(?(english|hindi|kannada|telugu|marathi)\)?\s*$/i);
+  if (m) {
+    return { base: m[1].trim(), lang: LANGUAGE_WORDS[m[2].toLowerCase()] };
+  }
+  return { base: nameNoExt.trim(), lang: null }; // null = use the language dropdown's selection
+}
+
 export default function Library({ user }) {
   const isStaff = ['admin', 'supervisor', 'trainer'].includes(user.role);
   const [items, setItems] = useState(null);
@@ -96,19 +110,40 @@ export default function Library({ user }) {
     setUploadProgress('');
     try {
       // One file selected with a title typed in → single library item, as before.
-      // Multiple files (or a whole folder) → one library item per file, named after
-      // the file (and its folder path, for folder uploads) since a single shared
-      // title wouldn't tell them apart.
+      // Multiple files (or a whole folder) → upload every file, then group files that
+      // share the same base title (after stripping a trailing language word like
+      // "_Hindi") into ONE library item with several language versions attached,
+      // instead of a separate card per file.
       const multi = files.length > 1;
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        setUploadProgress(`Uploading ${i + 1} of ${files.length}: ${f.name}`);
+      if (!multi) {
+        const f = files[0];
+        setUploadProgress(`Uploading ${f.name}`);
         const { file_url } = await uploadOne(f);
         await api.addLibraryItem({
-          title: multi ? titleFromFile(f) : title.trim(),
+          title: title.trim(),
           topic: topic.trim() || folderNameFromFile(f) || null,
           files: [{ language, file_type: guessFileType(f.name) || fileType, file_url }],
         });
+      } else {
+        const groups = new Map(); // base title (lowercased) -> { title, topic, files: [] }
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          setUploadProgress(`Uploading ${i + 1} of ${files.length}: ${f.name}`);
+          const { file_url } = await uploadOne(f);
+          const { base, lang } = detectLanguageAndBase(titleFromFile(f));
+          const key = base.toLowerCase();
+          if (!groups.has(key)) {
+            groups.set(key, { title: base, topic: topic.trim() || folderNameFromFile(f) || null, files: [] });
+          }
+          groups.get(key).files.push({
+            language: lang || language,
+            file_type: guessFileType(f.name) || fileType,
+            file_url,
+          });
+        }
+        for (const group of groups.values()) {
+          await api.addLibraryItem(group);
+        }
       }
       setTitle('');
       setTopic('');
