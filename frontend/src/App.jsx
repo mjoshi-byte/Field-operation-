@@ -68,20 +68,30 @@ export default function App() {
   return (
     <div>
       <header style={navStyle}>
-        <strong>FO Training &amp; OJT</strong>
-        <nav style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {user.role === 'fo' && <Link to="/me">My Dashboard</Link>}
-          {user.role === 'fo' && <Link to="/checklist">OJT Checklist</Link>}
-          <Link to="/updates">Updates &amp; Quizzes</Link>
-          <Link to="/library">Library</Link>
-          {isStaff && <Link to="/trainer/overview">OJT Overview</Link>}
-          {isStaff && <Link to="/trainer/publish">Publish Update</Link>}
-          {isStaff && <Link to="/team">Team Dashboard</Link>}
-          {user.role === 'admin' && <Link to="/admin/users">Admin</Link>}
+        <strong style={{ fontSize: '1.2rem', letterSpacing: '-0.01em' }}>FO Training &amp; OJT</strong>
+        <nav style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {user.role === 'fo' && <Link style={navLinkStyle} to="/me">My Dashboard</Link>}
+          {user.role === 'fo' && <Link style={navLinkStyle} to="/checklist">OJT Checklist</Link>}
+          <Link style={navLinkStyle} to="/updates">Updates &amp; Quizzes</Link>
+          <Link style={navLinkStyle} to="/library">Library</Link>
+          {isStaff && <Link style={navLinkStyle} to="/trainer/overview">OJT Overview</Link>}
+          {isStaff && <Link style={navLinkStyle} to="/trainer/publish">Publish Update</Link>}
+          {isStaff && <Link style={navLinkStyle} to="/team">Team Dashboard</Link>}
+          {user.role === 'admin' && <Link style={navLinkStyle} to="/admin/users">Admin</Link>}
         </nav>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span>{user.name} ({user.role})</span>
-          <button onClick={handleLogout}>Sign out</button>
+          <span style={{ fontWeight: 500 }}>{user.name} ({user.role})</span>
+          <button
+            onClick={handleLogout}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.4)',
+              color: 'white',
+              fontWeight: 500,
+            }}
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
@@ -108,8 +118,14 @@ const navStyle = {
   display: 'flex',
   alignItems: 'center',
   gap: 20,
-  padding: '12px 20px',
-  background: '#14213d',
+  padding: '14px 24px',
+  background: 'var(--color-primary)',
   color: 'white',
   flexWrap: 'wrap',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+};
+
+const navLinkStyle = {
+  color: 'rgba(255,255,255,0.85)',
+  fontWeight: 500,
 };

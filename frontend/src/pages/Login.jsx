@@ -25,10 +25,18 @@ export default function Login() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#14213d' }}>
-      <div style={{ background: 'white', padding: 32, borderRadius: 12, width: 380 }}>
+    <div
+      style={{
+        display: 'flex',
+        minHeight: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)',
+      }}
+    >
+      <div style={{ background: 'white', padding: 36, borderRadius: 14, width: 380, boxShadow: '0 10px 30px rgba(0,0,0,0.25)' }}>
         <h2 style={{ marginTop: 0 }}>FO Training &amp; OJT</h2>
-        <p style={{ color: '#555' }}>Sign in with your Google account to continue.</p>
+        <p style={{ color: 'var(--color-text-muted)' }}>Sign in with your Google account to continue.</p>
 
         <button
           onClick={signInWithGoogle}
