@@ -15,7 +15,7 @@ export default function TeamDashboard() {
     api.leaderboard(stage).then((r) => setLeaderboard(r.leaderboard)).catch((e) => setError(e.message));
   }, [stage]);
 
-  if (error) return <p style={{ color: 'crimson' }}>{error}</p>;
+  if (error) return <p style={{ color: 'var(--color-danger)' }}>{error}</p>;
   if (!data) return <p>Loading…</p>;
 
   const { fosAtAGlance, updateStats, late, quizAnalytics } = data;
@@ -25,7 +25,7 @@ export default function TeamDashboard() {
       <h2>Team dashboard</h2>
 
       <div style={grid}>
-        <div style={card('#eefbf1')}>
+        <div style={card('var(--color-success)')}>
           <h3>FOs at a glance</h3>
           <table style={table}>
             <tbody>
@@ -36,7 +36,7 @@ export default function TeamDashboard() {
           </table>
         </div>
 
-        <div style={card('#fdecea')}>
+        <div style={card('var(--color-danger)')}>
           <h3>Who's late</h3>
           {late.length === 0 && <p>Nobody overdue 🎉</p>}
           <table style={table}>
@@ -49,7 +49,7 @@ export default function TeamDashboard() {
         </div>
       </div>
 
-      <div style={{ ...card('#eef3ff'), marginTop: 16 }}>
+      <div style={{ ...card('var(--color-primary)'), marginTop: 16 }}>
         <h3>Update &amp; quiz stats</h3>
         <table style={table}>
           <thead>
@@ -66,10 +66,10 @@ export default function TeamDashboard() {
         </table>
       </div>
 
-      <div style={{ ...card('#fafafa'), marginTop: 16 }}>
+      <div style={{ ...card(), marginTop: 16 }}>
         <h3>Quiz analytics</h3>
         <p>Average score: {quizAnalytics.avgScore ?? '—'}% · Pass rate: {quizAnalytics.passRate ?? '—'}%</p>
-        <p style={{ fontSize: 13, color: '#999' }}>{quizAnalytics.note}</p>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{quizAnalytics.note}</p>
         {quizAnalytics.mostMissed.length > 0 && (
           <>
             <h4>Most-missed questions</h4>
@@ -78,7 +78,7 @@ export default function TeamDashboard() {
         )}
       </div>
 
-      <div style={{ ...card('#fff'), marginTop: 16 }}>
+      <div style={{ ...card(), marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0 }}>Leaderboard ({stage})</h3>
           <select value={stage} onChange={(e) => setStage(e.target.value)}>
@@ -86,7 +86,7 @@ export default function TeamDashboard() {
             <option value="production">Production</option>
           </select>
         </div>
-        <p style={{ fontSize: 13, color: '#999' }}>OJT and Production have separate leaderboards — no combined view.</p>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>OJT and Production have separate leaderboards — no combined view.</p>
         <table style={table}>
           <thead><tr><th style={th}>FO</th><th style={th}>Avg score</th><th style={th}>Quizzes passed</th></tr></thead>
           <tbody>
@@ -105,7 +105,19 @@ export default function TeamDashboard() {
 }
 
 const grid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
-const table = { width: '100%', borderCollapse: 'collapse' };
-const th = { textAlign: 'left', padding: 6, borderBottom: '2px solid #ddd' };
-const td = { padding: 6, borderBottom: '1px solid #eee' };
-function card(bg) { return { background: bg, borderRadius: 10, padding: 16 }; }
+// These tables sit inside colored cards rather than the page's default styled
+// <table>, so give them their own transparent, minimal look instead of the
+// global table/thead/tbody styling.
+const table = { width: '100%', borderCollapse: 'collapse', background: 'transparent', boxShadow: 'none' };
+const th = { textAlign: 'left', padding: 6, borderBottom: '2px solid var(--color-border)', color: 'var(--color-text)', background: 'transparent' };
+const td = { padding: 6, borderBottom: '1px solid var(--color-border)', color: 'var(--color-text)' };
+function card(accent) {
+  return {
+    background: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
+    borderLeft: accent ? `4px solid ${accent}` : '1px solid var(--color-border)',
+    borderRadius: 10,
+    padding: 16,
+    color: 'var(--color-text)',
+  };
+}

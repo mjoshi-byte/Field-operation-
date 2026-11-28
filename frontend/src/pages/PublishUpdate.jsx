@@ -138,7 +138,7 @@ export default function PublishUpdate() {
 
         <h3>Quiz questions</h3>
         {questions.map((q, qi) => (
-          <div key={qi} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+          <div key={qi} style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 10, marginBottom: 10 }}>
             <select value={q.language} onChange={(e) => updateQuestion(qi, { language: e.target.value })}>
               {LANGS.map((l) => (
                 <option key={l} value={l}>{l}</option>
@@ -185,8 +185,8 @@ export default function PublishUpdate() {
           </button>
         </div>
       </form>
-      {status && <p style={{ color: 'green' }}>{status}</p>}
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
+      {status && <p style={{ color: 'var(--color-success)' }}>{status}</p>}
+      {error && <p style={{ color: 'var(--color-danger)' }}>{error}</p>}
     </div>
   );
 }

@@ -58,7 +58,7 @@ export default function UpdateQuiz({ user }) {
     }
   }
 
-  if (error) return <p style={{ color: 'crimson' }}>{error}</p>;
+  if (error) return <p style={{ color: 'var(--color-danger)' }}>{error}</p>;
   if (!update) return <p>Loading…</p>;
 
   const isUpdateKind = update.update.kind === 'update';
@@ -83,7 +83,7 @@ export default function UpdateQuiz({ user }) {
           {result.graded.map((g) => {
             const q = shownQuestions.find((q) => q.id === g.question_id);
             return (
-              <li key={g.question_id} style={{ color: g.correct ? 'green' : 'crimson' }}>
+              <li key={g.question_id} style={{ color: g.correct ? 'var(--color-success)' : 'var(--color-danger)' }}>
                 {q?.question_text} — {g.correct ? 'Correct' : 'Incorrect'}
               </li>
             );
@@ -117,7 +117,7 @@ export default function UpdateQuiz({ user }) {
               Acknowledge — I have read this
             </button>
           )}
-          {acknowledged && <p style={{ color: 'green' }}>Acknowledged ✓</p>}
+          {acknowledged && <p style={{ color: 'var(--color-success)' }}>Acknowledged ✓</p>}
         </div>
       )}
 
@@ -149,4 +149,4 @@ export default function UpdateQuiz({ user }) {
   );
 }
 
-const card = { background: 'white', borderRadius: 10, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' };
+const card = { background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, padding: 16, color: 'var(--color-text)' };

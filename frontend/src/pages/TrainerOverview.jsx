@@ -11,19 +11,19 @@ export default function TrainerOverview() {
   }
   useEffect(load, []);
 
-  if (error) return <p style={{ color: 'crimson' }}>{error}</p>;
+  if (error) return <p style={{ color: 'var(--color-danger)' }}>{error}</p>;
   if (!overview) return <p>Loading…</p>;
 
   return (
     <div>
       <h2>OJT overview</h2>
-      <p style={{ color: '#666' }}>Who's on which day, who's waiting for review, who's been sent back, who's finished.</p>
+      <p style={{ color: 'var(--color-text-muted)' }}>Who's on which day, who's waiting for review, who's been sent back, who's finished.</p>
       {overview.map((row) => (
-        <div key={row.fo.id} style={{ background: 'white', borderRadius: 10, padding: 14, marginBottom: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+        <div key={row.fo.id} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, padding: 14, marginBottom: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <strong>{row.fo.name}</strong> — {row.fo.city || 'no city'}{' '}
-              {row.fo.status !== 'active' && <span style={{ color: 'crimson' }}>({row.fo.status})</span>}
+              {row.fo.status !== 'active' && <span style={{ color: 'var(--color-danger)' }}>({row.fo.status})</span>}
             </div>
             <div>
               Day: {row.currentDay ?? '—'} · Approved {row.approvedCount}/{row.totalDays}
@@ -64,14 +64,14 @@ function ReviewPanel({ foId, days, onDone }) {
   }
 
   return (
-    <div style={{ marginTop: 12, borderTop: '1px solid #eee', paddingTop: 12 }}>
+    <div style={{ marginTop: 12, borderTop: '1px solid var(--color-border)', paddingTop: 12 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>
           {days.map((d) => (
-            <tr key={d.day_number} style={{ borderBottom: '1px solid #f0f0f0' }}>
+            <tr key={d.day_number} style={{ borderBottom: '1px solid var(--color-border)' }}>
               <td style={{ padding: 6 }}>{d.title}</td>
               <td style={{ padding: 6 }}>{d.status || 'locked'}</td>
-              <td style={{ padding: 6, color: '#888' }}>{d.reviewer_comment || ''}</td>
+              <td style={{ padding: 6, color: 'var(--color-text-muted)' }}>{d.reviewer_comment || ''}</td>
             </tr>
           ))}
         </tbody>
@@ -98,9 +98,9 @@ function ReviewPanel({ foId, days, onDone }) {
           </div>
         </>
       ) : (
-        <p style={{ color: '#888' }}>Nothing currently waiting for review.</p>
+        <p style={{ color: 'var(--color-text-muted)' }}>Nothing currently waiting for review.</p>
       )}
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
+      {error && <p style={{ color: 'var(--color-danger)' }}>{error}</p>}
     </div>
   );
 }

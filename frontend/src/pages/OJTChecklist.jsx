@@ -33,7 +33,7 @@ export default function OJTChecklist({ user }) {
     }
   }
 
-  if (error) return <p style={{ color: 'crimson' }}>{error}</p>;
+  if (error) return <p style={{ color: 'var(--color-danger)' }}>{error}</p>;
   if (!checklist) return <p>Loading…</p>;
 
   return (
@@ -59,10 +59,10 @@ function DayCard({ day, onToggle, onSubmit, busy }) {
         <StatusBadge status={status} />
       </div>
 
-      {locked && <p style={{ color: '#888' }}>Complete the previous day first.</p>}
+      {locked && <p style={{ color: 'var(--color-text-muted)' }}>Complete the previous day first.</p>}
 
       {!locked && day.progress.reviewer_comment && status === 'needs_redo' && (
-        <div style={{ background: '#fff3cd', padding: 10, borderRadius: 6, margin: '10px 0' }}>
+        <div style={{ background: '#fff3cd', color: '#5c4400', padding: 10, borderRadius: 6, margin: '10px 0' }}>
           <strong>Needs redo:</strong> {day.progress.reviewer_comment}
           {day.progress.redo_count >= 2 && <p style={{ margin: '6px 0 0' }}>This day has already been sent back twice.</p>}
         </div>
@@ -97,8 +97,8 @@ function DayCard({ day, onToggle, onSubmit, busy }) {
           Submit day for review
         </button>
       )}
-      {status === 'submitted' && <p style={{ color: '#666' }}>Waiting for trainer/supervisor review.</p>}
-      {status === 'approved' && <p style={{ color: 'green' }}>Approved ✅</p>}
+      {status === 'submitted' && <p style={{ color: 'var(--color-text-muted)' }}>Waiting for trainer/supervisor review.</p>}
+      {status === 'approved' && <p style={{ color: 'var(--color-success)' }}>Approved ✅</p>}
     </div>
   );
 }
@@ -117,4 +117,10 @@ function StatusBadge({ status }) {
   );
 }
 
-const cardStyle = { background: 'white', borderRadius: 10, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' };
+const cardStyle = {
+  background: 'var(--color-surface)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 10,
+  padding: 16,
+  color: 'var(--color-text)',
+};

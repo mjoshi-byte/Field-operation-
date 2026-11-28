@@ -14,7 +14,7 @@ export default function UpdatesList({ user }) {
     }
   }, [user]);
 
-  if (error) return <p style={{ color: 'crimson' }}>{error}</p>;
+  if (error) return <p style={{ color: 'var(--color-danger)' }}>{error}</p>;
   if (!items) return <p>Loading…</p>;
 
   if (user.role !== 'fo') {
@@ -23,7 +23,7 @@ export default function UpdatesList({ user }) {
         <h2>Updates &amp; quizzes</h2>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '2px solid #ddd' }}>
+            <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--color-border)' }}>
               <th style={th}>Title</th>
               <th style={th}>Kind</th>
               <th style={th}>Status</th>
@@ -32,7 +32,7 @@ export default function UpdatesList({ user }) {
           </thead>
           <tbody>
             {items.map((u) => (
-              <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
+              <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td style={td}>{u.title}</td>
                 <td style={td}>{u.kind === 'standalone_quiz' ? 'Standalone quiz' : 'Update'}</td>
                 <td style={td}>{u.status}</td>
@@ -54,20 +54,21 @@ export default function UpdatesList({ user }) {
           <li
             key={item.id}
             style={{
-              background: 'white',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
               borderRadius: 10,
               padding: 14,
               marginBottom: 10,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              color: 'var(--color-text)',
             }}
           >
             <Link to={`/updates/${item.update_id}`} style={{ fontWeight: 'bold' }}>
               {item.title}
             </Link>
-            <div style={{ color: '#666', fontSize: 14 }}>
+            <div style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
               {item.kind === 'standalone_quiz' ? 'Standalone quiz' : 'Update'} · Status: {item.status}{' '}
               {item.overdue ? (
-                <span style={{ color: 'crimson' }}>· Overdue</span>
+                <span style={{ color: 'var(--color-danger)' }}>· Overdue</span>
               ) : (
                 item.status !== 'passed' && <span>· {item.hours_remaining}h left</span>
               )}

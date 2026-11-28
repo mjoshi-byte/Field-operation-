@@ -45,7 +45,7 @@ export default function AdminUsers() {
     <div>
       <h2>Admin — people</h2>
 
-      <form onSubmit={addUser} style={{ background: 'white', padding: 16, borderRadius: 10, marginBottom: 20, maxWidth: 500 }}>
+      <form onSubmit={addUser} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', padding: 16, borderRadius: 10, marginBottom: 20, maxWidth: 500 }}>
         <h3 style={{ marginTop: 0 }}>Add new hire / staff</h3>
         <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required style={inputStyle} />
         <input type="email" placeholder="Email address" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required style={inputStyle} />
@@ -68,19 +68,19 @@ export default function AdminUsers() {
         <button disabled={busy}>Add</button>
       </form>
 
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
+      {error && <p style={{ color: 'var(--color-danger)' }}>{error}</p>}
       {!users && <p>Loading…</p>}
 
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid #ddd' }}>
+          <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--color-border)' }}>
             <th style={th}>Name</th><th style={th}>Role</th><th style={th}>Stage</th><th style={th}>Status</th><th style={th}>Actions</th>
           </tr>
         </thead>
         <tbody>
           {users?.map((u) => (
-            <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td style={td}>{u.name} <span style={{ color: '#999' }}>({u.email})</span></td>
+            <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+              <td style={td}>{u.name} <span style={{ color: 'var(--color-text-muted)' }}>({u.email})</span></td>
               <td style={td}>{u.role}</td>
               <td style={td}>{u.stage || '—'}</td>
               <td style={td}>{u.status}</td>
