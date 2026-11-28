@@ -28,6 +28,18 @@ function titleFromFile(f) {
 // For a folder upload, webkitRelativePath looks like "MyFolder/sub/file.pdf" — this
 // pulls out just the top-level folder name, used as the Topic so files uploaded
 // together stay grouped in the library even though each gets its own title.
+// Browsers download .pptx/.ppt/.docx/.doc/.xlsx straight away instead of previewing
+// them (there's no native viewer), so route those through Google's viewer, which
+// renders them in a new tab. PDFs, images and videos already preview fine as-is.
+function viewableUrl(fileUrl, fileType, filename = '') {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  const officeExt = ['ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx'];
+  if (fileType === 'slide' || officeExt.includes(ext)) {
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+  }
+  return fileUrl;
+}
+
 function folderNameFromFile(f) {
   if (!f.webkitRelativePath) return null;
   const parts = f.webkitRelativePath.split('/');
@@ -126,6 +138,16 @@ export default function Library({ user }) {
       setViews(r.views);
     } catch (err) {
       setViewsError(err.message);
+    }
+  }
+
+  async function handleDelete(item) {
+    if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
+    try {
+      await api.deleteLibraryItem(item.id);
+      setItems((prev) => prev.filter((it) => it.id !== item.id));
+    } catch (err) {
+      setError(err.message);
     }
   }
 
@@ -249,7 +271,12 @@ export default function Library({ user }) {
             {item.topic && <p style={{ color: 'var(--color-text-muted)', margin: '0 0 8px' }}>{item.topic}</p>}
             {item.file ? (
               <>
-                <a href={item.file.file_url} target="_blank" rel="noreferrer" onClick={() => handleOpen(item)}>
+                <a
+                  href={viewableUrl(item.file.file_url, item.file.file_type, item.file.file_url)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => handleOpen(item)}
+                >
                   Open ({item.file.file_type})
                 </a>
                 {item.used_fallback && (
@@ -270,20 +297,34 @@ export default function Library({ user }) {
 
             {isStaff && (
               <>
-                <button
-                  onClick={() => toggleViews(item)}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text)',
-                    fontSize: 13,
-                    minHeight: 32,
-                    padding: '0 10px',
-                    marginTop: 8,
-                  }}
-                >
-                  {expandedId === item.id ? 'Hide watch status' : 'Watch status'}
-                </button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button
+                    onClick={() => toggleViews(item)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--color-border)',
+                      color: 'var(--color-text)',
+                      fontSize: 13,
+                      minHeight: 32,
+                      padding: '0 10px',
+                    }}
+                  >
+                    {expandedId === item.id ? 'Hide watch status' : 'Watch status'}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--color-danger)',
+                      color: 'var(--color-danger)',
+                      fontSize: 13,
+                      minHeight: 32,
+                      padding: '0 10px',
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
 
                 {expandedId === item.id && (
                   <div style={{ marginTop: 10, borderTop: '1px solid var(--color-border)', paddingTop: 10 }}>
