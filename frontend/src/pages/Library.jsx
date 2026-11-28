@@ -10,6 +10,22 @@ const LANGUAGES = [
 ];
 const FILE_TYPES = ['pdf', 'slide', 'video', 'document', 'image'];
 
+function guessFileType(filename) {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'video';
+  if (['ppt', 'pptx', 'key'].includes(ext)) return 'slide';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) return 'image';
+  if (['pdf'].includes(ext)) return 'pdf';
+  return 'document';
+}
+
+// Nicer display name: strips the extension, and for folder uploads keeps the
+// relative path so files from different subfolders don't look identical.
+function titleFromFile(f) {
+  const name = f.webkitRelativePath || f.name;
+  return name.replace(/\.[^/.]+$/, '');
+}
+
 export default function Library({ user }) {
   const isStaff = ['admin', 'supervisor', 'trainer'].includes(user.role);
   const [items, setItems] = useState(null);
@@ -21,8 +37,9 @@ export default function Library({ user }) {
   const [topic, setTopic] = useState('');
   const [language, setLanguage] = useState('en');
   const [fileType, setFileType] = useState('pdf');
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   const [formError, setFormError] = useState('');
 
   const [expandedId, setExpandedId] = useState(null);
@@ -42,35 +59,49 @@ export default function Library({ user }) {
     }
   }
 
+  async function uploadOne(f) {
+    // Small files go through our API; anything over ~4MB (videos, big decks) uploads
+    // straight to storage from the browser so it isn't limited by Vercel's function
+    // body-size cap.
+    const SMALL_FILE_LIMIT = 4 * 1024 * 1024;
+    return f.size <= SMALL_FILE_LIMIT ? api.uploadLibraryFile(f) : api.uploadLibraryFileDirect(f);
+  }
+
   async function handleAdd(e) {
     e.preventDefault();
     setFormError('');
-    if (!title.trim()) return setFormError('Title is required');
-    if (!file) return setFormError('Choose a file to upload');
+    if (files.length === 0) return setFormError('Choose at least one file (or a folder) to upload');
+    if (files.length === 1 && !title.trim()) return setFormError('Title is required');
     setUploading(true);
+    setUploadProgress('');
     try {
-      // Small files go through our API; anything over ~4MB (videos, big decks) uploads
-      // straight to storage from the browser so it isn't limited by Vercel's function
-      // body-size cap.
-      const SMALL_FILE_LIMIT = 4 * 1024 * 1024;
-      const { file_url } =
-        file.size <= SMALL_FILE_LIMIT ? await api.uploadLibraryFile(file) : await api.uploadLibraryFileDirect(file);
-      await api.addLibraryItem({
-        title: title.trim(),
-        topic: topic.trim() || null,
-        files: [{ language, file_type: fileType, file_url }],
-      });
+      // One file selected with a title typed in → single library item, as before.
+      // Multiple files (or a whole folder) → one library item per file, named after
+      // the file (and its folder path, for folder uploads) since a single shared
+      // title wouldn't tell them apart.
+      const multi = files.length > 1;
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        setUploadProgress(`Uploading ${i + 1} of ${files.length}: ${f.name}`);
+        const { file_url } = await uploadOne(f);
+        await api.addLibraryItem({
+          title: multi ? titleFromFile(f) : title.trim(),
+          topic: topic.trim() || null,
+          files: [{ language, file_type: guessFileType(f.name) || fileType, file_url }],
+        });
+      }
       setTitle('');
       setTopic('');
       setLanguage('en');
       setFileType('pdf');
-      setFile(null);
+      setFiles([]);
       setShowForm(false);
       load();
     } catch (err) {
       setFormError(err.message);
     } finally {
       setUploading(false);
+      setUploadProgress('');
     }
   }
 
@@ -120,8 +151,13 @@ export default function Library({ user }) {
           }}
         >
           <div>
-            <label>Title</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Rig handling SOP" />
+            <label>Title{files.length > 1 ? ' (ignored — using each file’s name)' : ''}</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Rig handling SOP"
+              disabled={files.length > 1}
+            />
           </div>
           <div>
             <label>Topic (optional)</label>
@@ -146,9 +182,37 @@ export default function Library({ user }) {
             </div>
           </div>
           <div>
-            <label>File</label>
-            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            <label>File(s)</label>
+            <input
+              type="file"
+              multiple
+              onChange={(e) => setFiles(Array.from(e.target.files || []))}
+            />
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '6px 0 0' }}>
+              Hold Ctrl/Cmd to pick several files at once, or use the folder picker below to upload
+              every file inside a folder.
+            </p>
           </div>
+          <div>
+            <label>Or upload a whole folder</label>
+            <input
+              type="file"
+              // non-standard attributes; browsers (Chrome/Edge/Firefox) support this to pick a folder
+              webkitdirectory=""
+              directory=""
+              multiple
+              onChange={(e) => setFiles(Array.from(e.target.files || []))}
+            />
+          </div>
+          {files.length > 0 && (
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0 }}>
+              {files.length} file{files.length > 1 ? 's' : ''} selected
+              {files.length > 1 ? ' — each becomes its own library entry.' : '.'}
+            </p>
+          )}
+          {uploading && uploadProgress && (
+            <p style={{ fontSize: 13, color: 'var(--color-accent)', margin: 0 }}>{uploadProgress}</p>
+          )}
           {formError && <p style={{ color: 'var(--color-danger)', margin: 0 }}>{formError}</p>}
           <button disabled={uploading} type="submit">{uploading ? 'Uploading…' : 'Upload & add'}</button>
         </form>
