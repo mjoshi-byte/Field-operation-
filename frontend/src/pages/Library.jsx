@@ -49,7 +49,12 @@ export default function Library({ user }) {
     if (!file) return setFormError('Choose a file to upload');
     setUploading(true);
     try {
-      const { file_url } = await api.uploadLibraryFile(file);
+      // Small files go through our API; anything over ~4MB (videos, big decks) uploads
+      // straight to storage from the browser so it isn't limited by Vercel's function
+      // body-size cap.
+      const SMALL_FILE_LIMIT = 4 * 1024 * 1024;
+      const { file_url } =
+        file.size <= SMALL_FILE_LIMIT ? await api.uploadLibraryFile(file) : await api.uploadLibraryFileDirect(file);
       await api.addLibraryItem({
         title: title.trim(),
         topic: topic.trim() || null,

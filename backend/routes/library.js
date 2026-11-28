@@ -62,8 +62,10 @@ router.post('/', requireAuth, requireRole('admin', 'supervisor', 'trainer'), asy
   res.status(201).json({ id: rows[0].id });
 });
 
-// Admin/trainer/supervisor uploads an actual file (PDF/video/image/etc.) to Supabase
-// Storage; returns a public URL to attach to a library item via POST / above.
+// Admin/trainer/supervisor uploads a small file (PDF/image/etc.) to Supabase Storage
+// by sending the bytes through this function. Vercel serverless functions cap request
+// bodies at a few MB, so this path only works for small files — see /upload-url below
+// for anything bigger (videos, large decks).
 router.post('/upload', requireAuth, requireRole('admin', 'supervisor', 'trainer'), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file received' });
   const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -75,6 +77,21 @@ router.post('/upload', requireAuth, requireRole('admin', 'supervisor', 'trainer'
   if (error) return res.status(500).json({ error: error.message });
   const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
   res.json({ file_url: data.publicUrl });
+});
+
+// Admin/trainer/supervisor requests a one-time signed upload URL, then the browser
+// (frontend) uploads the file BYTES straight to Supabase Storage — never through this
+// backend/Vercel function — so there's no Vercel body-size limit for large files
+// (videos, big slide decks). This endpoint itself only returns a small JSON blob.
+router.post('/upload-url', requireAuth, requireRole('admin', 'supervisor', 'trainer'), async (req, res) => {
+  const { filename } = req.body;
+  if (!filename) return res.status(400).json({ error: 'filename required' });
+  const safeName = String(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${Date.now()}-${safeName}`;
+  const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error) return res.status(500).json({ error: error.message });
+  const { data: pub } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
+  res.json({ path, token: data.token, file_url: pub.publicUrl });
 });
 
 router.put('/:id', requireAuth, requireRole('admin', 'supervisor', 'trainer'), async (req, res) => {

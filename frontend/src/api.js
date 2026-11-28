@@ -65,6 +65,7 @@ export const api = {
   // library
   listLibrary: (params = {}) => request('/library?' + new URLSearchParams(params)),
   addLibraryItem: (body) => request('/library', { method: 'POST', body }),
+  // Small-file path (goes through our backend). Keep for files comfortably under ~4MB.
   uploadLibraryFile: async (file) => {
     const token = await getToken();
     const form = new FormData();
@@ -77,6 +78,21 @@ export const api = {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
     return data; // { file_url }
+  },
+  // Large-file path: get a one-time signed URL from the backend, then upload the file
+  // bytes straight to Supabase Storage from the browser — bypasses Vercel's serverless
+  // body-size limit entirely, so this works for videos and large decks.
+  uploadLibraryFileDirect: async (file, onProgress) => {
+    const { path, token: uploadToken, file_url } = await request('/library/upload-url', {
+      method: 'POST',
+      body: { filename: file.name },
+    });
+    const { error } = await supabase.storage.from('library-files').uploadToSignedUrl(path, uploadToken, file, {
+      contentType: file.type || 'application/octet-stream',
+    });
+    if (error) throw new Error(error.message || 'Upload to storage failed');
+    if (onProgress) onProgress(100);
+    return { file_url };
   },
   markLibraryViewed: (id) => request(`/library/${id}/view`, { method: 'POST' }),
   libraryViews: (id) => request(`/library/${id}/views`),
