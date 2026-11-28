@@ -97,6 +97,7 @@ export const api = {
   markLibraryViewed: (id) => request(`/library/${id}/view`, { method: 'POST' }),
   libraryViews: (id) => request(`/library/${id}/views`),
   markLibraryView: (id, foId, viewed) => request(`/library/${id}/mark/${foId}`, { method: 'PUT', body: { viewed } }),
+  deleteLibraryItem: (id) => request(`/library/${id}`, { method: 'DELETE' }),
 
   // dashboard
   foDashboard: (id) => request(`/dashboard/fo/${id}`),
