@@ -1,6 +1,30 @@
 const express = require('express');
 const { db } = require('../db');
 const { requireAuth, requireRole, audit, notify } = require('../middleware/auth');
+const { sendEmail } = require('../lib/email');
+
+// Emails every FO in `foIds` that a new update/quiz was published, including its
+// 72-hour (or custom) deadline, so they know to complete it in time.
+async function emailAudience(foIds, update, deadlineIso) {
+  if (foIds.length === 0) return;
+  const { rows: foUsers } = await db.query(
+    `SELECT id, email, name FROM users WHERE id = ANY($1::int[])`,
+    [foIds]
+  );
+  const deadlineText = new Date(deadlineIso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  const appUrl = process.env.APP_URL || '';
+  const kindLabel = update.kind === 'update' ? 'update' : 'quiz';
+  const subject = `New ${kindLabel}: ${update.title}`;
+  const html = `
+    <p>Hi {{NAME}},</p>
+    <p>A new ${kindLabel} — <strong>${update.title}</strong> — has been published for you.</p>
+    <p>Please complete it by <strong>${deadlineText}</strong>.</p>
+    ${appUrl ? `<p><a href="${appUrl}">Open FO Training &amp; OJT</a></p>` : ''}
+  `;
+  await Promise.all(
+    foUsers.map((f) => sendEmail(f.email, subject, html.replace('{{NAME}}', f.name || 'there')))
+  );
+}
 
 const router = express.Router();
 
@@ -109,6 +133,7 @@ router.post('/:id/publish', requireAuth, requireRole('admin', 'supervisor', 'tra
     );
     await notify(foId, 'new_update', update.kind === 'update' ? `New update: ${update.title}` : `New quiz: ${update.title}`, update.id);
   }
+  await emailAudience(fos, update, deadline);
 
   await audit(req.user.id, 'publish_update', 'update', update.id, { audience_count: fos.length });
   res.json({ update: await getUpdate(update.id), assigned_to: fos.length });
@@ -174,6 +199,7 @@ router.post('/:id/revise', requireAuth, requireRole('admin', 'supervisor', 'trai
     );
     await notify(foId, 'new_update', `Revised: ${patch.title ?? original.title} — please review again`, newId);
   }
+  await emailAudience(fos, { ...original, id: newId, title: patch.title ?? original.title }, deadline);
 
   await audit(req.user.id, 'revise_update', 'update', newId, { previous: original.id });
   res.status(201).json({ update: await getUpdate(newId) });
