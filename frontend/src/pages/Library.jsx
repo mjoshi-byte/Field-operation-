@@ -1,10 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
+const LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'hi', label: 'Hindi' },
+  { value: 'kn', label: 'Kannada' },
+  { value: 'te', label: 'Telugu' },
+  { value: 'mr', label: 'Marathi' },
+];
+const FILE_TYPES = ['pdf', 'slide', 'video', 'document', 'image'];
+
 export default function Library({ user }) {
+  const isStaff = ['admin', 'supervisor', 'trainer'].includes(user.role);
   const [items, setItems] = useState(null);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
+
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState('');
+  const [topic, setTopic] = useState('');
+  const [language, setLanguage] = useState('en');
+  const [fileType, setFileType] = useState('pdf');
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const [expandedId, setExpandedId] = useState(null);
+  const [views, setViews] = useState(null);
+  const [viewsError, setViewsError] = useState('');
 
   function load() {
     api.listLibrary(q ? { q } : {}).then((r) => setItems(r.items)).catch((e) => setError(e.message));
@@ -12,11 +35,120 @@ export default function Library({ user }) {
 
   useEffect(load, [q]);
 
-  if (error) return <p style={{ color: 'crimson' }}>{error}</p>;
+  async function handleOpen(item) {
+    if (user.role === 'fo') {
+      api.markLibraryViewed(item.id).catch(() => {});
+      setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, viewed: true } : it)));
+    }
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    setFormError('');
+    if (!title.trim()) return setFormError('Title is required');
+    if (!file) return setFormError('Choose a file to upload');
+    setUploading(true);
+    try {
+      const { file_url } = await api.uploadLibraryFile(file);
+      await api.addLibraryItem({
+        title: title.trim(),
+        topic: topic.trim() || null,
+        files: [{ language, file_type: fileType, file_url }],
+      });
+      setTitle('');
+      setTopic('');
+      setLanguage('en');
+      setFileType('pdf');
+      setFile(null);
+      setShowForm(false);
+      load();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function toggleViews(item) {
+    if (expandedId === item.id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(item.id);
+    setViews(null);
+    setViewsError('');
+    try {
+      const r = await api.libraryViews(item.id);
+      setViews(r.views);
+    } catch (err) {
+      setViewsError(err.message);
+    }
+  }
+
+  async function toggleMark(item, foId, nextViewed) {
+    await api.markLibraryView(item.id, foId, nextViewed);
+    setViews((prev) =>
+      prev.map((v) => (v.fo_id === foId ? { ...v, viewed_at: nextViewed ? new Date().toISOString() : null } : v))
+    );
+  }
+
+  if (error) return <p style={{ color: 'var(--color-danger)' }}>{error}</p>;
 
   return (
     <div>
-      <h2>Content library</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <h2>Content library</h2>
+        {isStaff && <button onClick={() => setShowForm((s) => !s)}>{showForm ? 'Cancel' : '+ Add content'}</button>}
+      </div>
+
+      {isStaff && showForm && (
+        <form
+          onSubmit={handleAdd}
+          style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 10,
+            padding: 16,
+            marginBottom: 16,
+            display: 'grid',
+            gap: 10,
+          }}
+        >
+          <div>
+            <label>Title</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Rig handling SOP" />
+          </div>
+          <div>
+            <label>Topic (optional)</label>
+            <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Rig handling" />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label>Language</label>
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} style={{ width: '100%' }}>
+                {LANGUAGES.map((l) => (
+                  <option key={l.value} value={l.value}>{l.label}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>File type</label>
+              <select value={fileType} onChange={(e) => setFileType(e.target.value)} style={{ width: '100%' }}>
+                {FILE_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label>File</label>
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          </div>
+          {formError && <p style={{ color: 'var(--color-danger)', margin: 0 }}>{formError}</p>}
+          <button disabled={uploading} type="submit">{uploading ? 'Uploading…' : 'Upload & add'}</button>
+        </form>
+      )}
+
       <input
         placeholder="Search topics or titles…"
         value={q}
@@ -25,22 +157,86 @@ export default function Library({ user }) {
       />
       {!items && <p>Loading…</p>}
       {items && items.length === 0 && <p>No content yet.</p>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
         {items?.map((item) => (
-          <div key={item.id} style={{ background: 'white', borderRadius: 10, padding: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <div
+            key={item.id}
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 10,
+              padding: 14,
+            }}
+          >
             <h4 style={{ margin: '0 0 6px' }}>{item.title}</h4>
-            {item.topic && <p style={{ color: '#888', margin: '0 0 8px' }}>{item.topic}</p>}
+            {item.topic && <p style={{ color: 'var(--color-text-muted)', margin: '0 0 8px' }}>{item.topic}</p>}
             {item.file ? (
               <>
-                <a href={item.file.file_url} target="_blank" rel="noreferrer">
+                <a href={item.file.file_url} target="_blank" rel="noreferrer" onClick={() => handleOpen(item)}>
                   Open ({item.file.file_type})
                 </a>
-                {item.used_fallback && <p style={{ color: '#a66', fontSize: 13 }}>Not available in your language — showing English.</p>}
+                {item.used_fallback && (
+                  <p style={{ color: 'var(--color-cta)', fontSize: 13 }}>Not available in your language — showing English.</p>
+                )}
+                {user.role === 'fo' && (
+                  <p style={{ fontSize: 13, color: item.viewed ? 'var(--color-success)' : 'var(--color-text-muted)', margin: '6px 0 0' }}>
+                    {item.viewed ? '✓ Watched' : 'Not watched yet'}
+                  </p>
+                )}
               </>
             ) : (
-              <p style={{ color: '#aaa' }}>No file attached</p>
+              <p style={{ color: 'var(--color-text-muted)' }}>No file attached</p>
             )}
-            <p style={{ fontSize: 12, color: '#999' }}>Updated {new Date(item.updated_at).toLocaleDateString()}</p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              Updated {new Date(item.updated_at).toLocaleDateString()}
+            </p>
+
+            {isStaff && (
+              <>
+                <button
+                  onClick={() => toggleViews(item)}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    fontSize: 13,
+                    minHeight: 32,
+                    padding: '0 10px',
+                    marginTop: 8,
+                  }}
+                >
+                  {expandedId === item.id ? 'Hide watch status' : 'Watch status'}
+                </button>
+
+                {expandedId === item.id && (
+                  <div style={{ marginTop: 10, borderTop: '1px solid var(--color-border)', paddingTop: 10 }}>
+                    {viewsError && <p style={{ color: 'var(--color-danger)' }}>{viewsError}</p>}
+                    {!views && !viewsError && <p>Loading…</p>}
+                    {views && views.length === 0 && <p style={{ color: 'var(--color-text-muted)' }}>No FOs yet.</p>}
+                    {views &&
+                      views.map((v) => (
+                        <div
+                          key={v.fo_id}
+                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}
+                        >
+                          <span style={{ fontSize: 14 }}>
+                            {v.name} {v.city ? `(${v.city})` : ''} —{' '}
+                            <span style={{ color: v.viewed_at ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                              {v.viewed_at ? 'watched' : 'not watched'}
+                            </span>
+                          </span>
+                          <button
+                            onClick={() => toggleMark(item, v.fo_id, !v.viewed_at)}
+                            style={{ fontSize: 12, minHeight: 28, padding: '0 8px' }}
+                          >
+                            {v.viewed_at ? 'Unmark' : 'Mark watched'}
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         ))}
       </div>

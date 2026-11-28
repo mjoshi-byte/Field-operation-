@@ -65,6 +65,22 @@ export const api = {
   // library
   listLibrary: (params = {}) => request('/library?' + new URLSearchParams(params)),
   addLibraryItem: (body) => request('/library', { method: 'POST', body }),
+  uploadLibraryFile: async (file) => {
+    const token = await getToken();
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(BASE + '/library/upload', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
+    return data; // { file_url }
+  },
+  markLibraryViewed: (id) => request(`/library/${id}/view`, { method: 'POST' }),
+  libraryViews: (id) => request(`/library/${id}/views`),
+  markLibraryView: (id, foId, viewed) => request(`/library/${id}/mark/${foId}`, { method: 'PUT', body: { viewed } }),
 
   // dashboard
   foDashboard: (id) => request(`/dashboard/fo/${id}`),

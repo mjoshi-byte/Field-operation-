@@ -13,6 +13,7 @@ import TrainerOverview from './pages/TrainerOverview.jsx';
 import PublishUpdate from './pages/PublishUpdate.jsx';
 import AdminUsers from './pages/AdminUsers.jsx';
 import TeamDashboard from './pages/TeamDashboard.jsx';
+import QuizLeaderboard from './pages/QuizLeaderboard.jsx';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -77,6 +78,7 @@ export default function App() {
           {isStaff && <Link style={navLinkStyle} to="/trainer/overview">OJT Overview</Link>}
           {isStaff && <Link style={navLinkStyle} to="/trainer/publish">Publish Update</Link>}
           {isStaff && <Link style={navLinkStyle} to="/team">Team Dashboard</Link>}
+          {isStaff && <Link style={navLinkStyle} to="/leaderboard">Leaderboard</Link>}
           {user.role === 'admin' && <Link style={navLinkStyle} to="/admin/users">Admin</Link>}
         </nav>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -106,6 +108,7 @@ export default function App() {
           {isStaff && <Route path="/trainer/overview" element={<TrainerOverview user={user} />} />}
           {isStaff && <Route path="/trainer/publish" element={<PublishUpdate user={user} />} />}
           {isStaff && <Route path="/team" element={<TeamDashboard user={user} />} />}
+          {isStaff && <Route path="/leaderboard" element={<QuizLeaderboard />} />}
           {user.role === 'admin' && <Route path="/admin/users" element={<AdminUsers user={user} />} />}
           <Route path="*" element={<Navigate to={user.role === 'fo' ? '/me' : '/team'} />} />
         </Routes>
@@ -119,13 +122,13 @@ const navStyle = {
   alignItems: 'center',
   gap: 20,
   padding: '14px 24px',
-  background: 'var(--color-primary)',
-  color: 'white',
+  background: 'var(--color-nav-bg)',
+  color: 'var(--color-text)',
   flexWrap: 'wrap',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+  borderBottom: '1px solid var(--color-border)',
 };
 
 const navLinkStyle = {
-  color: 'rgba(255,255,255,0.85)',
+  color: 'var(--color-text-muted)',
   fontWeight: 500,
 };
