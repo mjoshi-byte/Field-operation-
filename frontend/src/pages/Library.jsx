@@ -19,11 +19,19 @@ function guessFileType(filename) {
   return 'document';
 }
 
-// Nicer display name: strips the extension, and for folder uploads keeps the
-// relative path so files from different subfolders don't look identical.
+// Just the plain filename, extension stripped — never the folder path, so titles
+// stay short and readable even when uploading a whole folder.
 function titleFromFile(f) {
-  const name = f.webkitRelativePath || f.name;
-  return name.replace(/\.[^/.]+$/, '');
+  return f.name.replace(/\.[^/.]+$/, '');
+}
+
+// For a folder upload, webkitRelativePath looks like "MyFolder/sub/file.pdf" — this
+// pulls out just the top-level folder name, used as the Topic so files uploaded
+// together stay grouped in the library even though each gets its own title.
+function folderNameFromFile(f) {
+  if (!f.webkitRelativePath) return null;
+  const parts = f.webkitRelativePath.split('/');
+  return parts.length > 1 ? parts[0] : null;
 }
 
 export default function Library({ user }) {
@@ -86,7 +94,7 @@ export default function Library({ user }) {
         const { file_url } = await uploadOne(f);
         await api.addLibraryItem({
           title: multi ? titleFromFile(f) : title.trim(),
-          topic: topic.trim() || null,
+          topic: topic.trim() || folderNameFromFile(f) || null,
           files: [{ language, file_type: guessFileType(f.name) || fileType, file_url }],
         });
       }
